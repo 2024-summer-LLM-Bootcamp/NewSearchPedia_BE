@@ -16,18 +16,17 @@ load_dotenv()
 client_id = os.getenv("client_id")
 client_secret = os.getenv("client_secret")
 
-# 네이버 뉴스 API 호출 함수
-def get_news_from_naver(query, display, start):
-    url = f"https://openapi.naver.com/v1/search/news.json?query={query}&display={display}&start={start}"
-    headers = {
-        'X-Naver-Client-Id': client_id,
-        'X-Naver-Client-Secret': client_secret
-    }
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        return None
+# Azure OpenAI API 키와 엔드포인트 URL 설정
+api_key = os.getenv("AZURE_OPENAI_API_KEY")
+endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT")
+api_version = os.getenv("OPENAI_API_VERSION")
+
+# 요청 헤더 설정
+headers = {
+    "Content-Type": "application/json",
+    "api-key": api_key
+}
 
 # 뉴스 본문 및 썸네일 가져오기 함수
 def get_news_content_and_thumbnail(url):
@@ -76,8 +75,34 @@ class News(BaseModel):
     thumbnail: str
     date: str
 
-# 검색어 입력
-query = input("검색할 키워드를 입력해주세요: ")
+# Azure OpenAI 요청 함수
+def get_keywords_from_query(query):
+    data = {
+        "temperature": 0.3,
+        "max_tokens": 50,
+        "messages": [
+            {"role": "system", "content": "You are an assistant that extracts relevant keywords from user queries."},
+            {"role": "user", "content": f"Extract the most relevant keywords from the following query: '{query}'"}
+        ]
+    }
+
+    url = f"{endpoint}/openai/deployments/{deployment_name}/chat/completions?api-version={api_version}"
+    response = requests.post(url, headers=headers, json=data)
+    keywords = response.json()["choices"][0]["message"]["content"]
+    return keywords.strip()
+
+# 네이버 뉴스 API 호출 함수
+def get_news_from_naver(query, display, start):
+    url = f"https://openapi.naver.com/v1/search/news.json?query={query}&display={display}&start={start}"
+    headers = {
+        'X-Naver-Client-Id': client_id,
+        'X-Naver-Client-Secret': client_secret
+    }
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return None
 
 # 결과 저장 리스트
 news_list = []
@@ -111,30 +136,6 @@ def fetch_and_process_news(query):
             if len(news_list) == 10:
                 break
 
-# 뉴스 크롤링 시작
-fetch_and_process_news(query)
-
-# 결과 출력
-for i, news in enumerate(news_list):
-    print(f"[뉴스 {i + 1}]")
-    print(f"제목: {news.title}")
-    print(f"링크: {news.link}")
-    print(f"썸네일: {news.thumbnail}")
-    print(f"날짜: {news.date}")
-    print(f"내용: {news.content}\n")  # 전체 내용 출력
-
-# Azure OpenAI API 키와 엔드포인트 URL 설정
-api_key = os.getenv("AZURE_OPENAI_API_KEY")
-endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT")
-api_version = os.getenv("OPENAI_API_VERSION")
-
-# 요청 헤더 설정
-headers = {
-    "Content-Type": "application/json",
-    "api-key": api_key
-}
-
 # Pydantic 모델 정의
 class ArticleSummary(BaseModel):
     summary: str = Field(..., title="Summary of the combined news articles")
@@ -163,6 +164,27 @@ def summarize_articles(articles_content: List[str]) -> ArticleSummary:
     # Pydantic 모델 인스턴스로 변환
     summary = ArticleSummary(summary=summary_text)
     return summary
+
+# 검색어 입력
+query = input("검색할 키워드를 입력해주세요: ")
+
+# 키워드 추출
+keywords = get_keywords_from_query(query)
+print(f"추출된 키워드: {keywords}")  # 키워드 출력
+
+
+# 뉴스 크롤링 시작
+fetch_and_process_news(keywords)
+
+
+# 결과 출력
+for i, news in enumerate(news_list):
+    print(f"[뉴스 {i + 1}]")
+    print(f"제목: {news.title}")
+    print(f"링크: {news.link}")
+    print(f"썸네일: {news.thumbnail}")
+    print(f"날짜: {news.date}")
+    print(f"내용: {news.content}\n")  # 전체 내용 출력
 
 # 뉴스 기사 요약
 summary = summarize_articles([news.content for news in news_list])
