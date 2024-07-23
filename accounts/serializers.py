@@ -12,9 +12,8 @@ class UserSerializer(serializers.ModelSerializer):
 
 class CustomRegisterSerializer(RegisterSerializer):
     name = serializers.CharField(max_length=20, write_only=True, required=True)
-    email = serializers.CharField(
-        write_only=True, required=False, allow_blank=True)
-  
+    email = serializers.EmailField(
+        write_only=True, required=True, allow_blank=False)
 
     def custom_signup(self, request, user):
         name = self.validated_data.pop("name")
