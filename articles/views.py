@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from django.shortcuts import render
 from rest_framework import viewsets, serializers
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -7,11 +8,10 @@ import requests
 from bs4 import BeautifulSoup
 from .models import News
 from dotenv import load_dotenv
-from datetime import datetime
 from dateutil import parser
-import time
 from pydantic import BaseModel, Field
 from typing import List
+import time
 
 # 환경 변수 로드
 load_dotenv()
@@ -48,34 +48,17 @@ def get_news_content_and_thumbnail(url):
     try:
         response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
         soup = BeautifulSoup(response.text, 'html.parser')
-
         if 'news.naver.com' in url:
             content = soup.select_one('#dic_area')
             thumbnail = soup.select_one('meta[property="og:image"]')
-            if content:
-                content_text = content.get_text(strip=True)
-            else:
-                content_text = "본문을 가져올 수 없습니다."
-            if thumbnail:
-                thumbnail_url = thumbnail['content']
-            else:
-                thumbnail_url = ""
+            content_text = content.get_text(strip=True) if content else "본문을 가져올 수 없습니다."
+            thumbnail_url = thumbnail['content'] if thumbnail else ""
             return content_text, thumbnail_url
-
         article = soup.find('article')
-        if article:
-            content_text = article.get_text(strip=True)
-        else:
-            content_text = "본문을 가져올 수 없습니다."
-
+        content_text = article.get_text(strip=True) if article else "본문을 가져올 수 없습니다."
         thumbnail = soup.select_one('meta[property="og:image"]')
-        if thumbnail:
-            thumbnail_url = thumbnail['content']
-        else:
-            thumbnail_url = ""
-
+        thumbnail_url = thumbnail['content'] if thumbnail else ""
         return content_text, thumbnail_url
-
     except Exception as e:
         return "본문을 가져올 수 없습니다.", ""
 
@@ -89,7 +72,6 @@ def get_keywords_from_query(query):
             {"role": "user", "content": f"Extract the most relevant keywords from the following query: '{query}'"}
         ]
     }
-
     url = f"{endpoint}/openai/deployments/{deployment_name}/chat/completions?api-version={api_version}"
     response = requests.post(url, headers=headers, json=data)
     keywords = response.json()["choices"][0]["message"]["content"]
@@ -108,23 +90,18 @@ def get_news_from_naver(query, display, start):
     else:
         return None
 
-# 결과 저장 리스트
-news_list = []
-
 # 뉴스 데이터를 받아와서 처리하는 함수
 def fetch_and_process_news(query):
     news_data = get_news_from_naver(query, 100, 1)
-    if (news_data and 'items' in news_data):
+    news_list = []
+    if news_data and 'items' in news_data:
         articles_content = []
         for item in news_data['items']:
             if len(news_list) < 10:
                 title = item['title']
                 link = item['link']
                 pubDate = parser.parse(item['pubDate'])
-                # 본문 내용 및 썸네일 가져오기
                 content, thumbnail = get_news_content_and_thumbnail(link)
-
-                # 뉴스 객체 생성
                 news = News(
                     title=title,
                     content=content,
@@ -132,22 +109,16 @@ def fetch_and_process_news(query):
                     thumbnail=thumbnail,
                     date=pubDate
                 )
-
                 news_list.append(news)
                 articles_content.append(content)
-
-                # 과도한 요청을 방지하기 위해 잠시 대기
                 time.sleep(0.5)
-
             if len(news_list) == 10:
                 break
-
-        # 뉴스 요약
         summary = summarize_articles(articles_content).summary
         for news in news_list:
             news.summary = summary
-
         News.objects.bulk_create(news_list)
+    return news_list
 
 # Pydantic 모델 정의
 class ArticleSummary(BaseModel):
@@ -164,36 +135,18 @@ def summarize_articles(articles_content: List[str]) -> ArticleSummary:
             {"role": "user", "content": combined_content}
         ]
     }
-
-    # 엔드포인트 URL 구성
     url = f"{endpoint}/openai/deployments/{deployment_name}/chat/completions?api-version={api_version}"
-
-    # POST 요청 보내기
     response = requests.post(url, headers=headers, json=data)
-
-    # 응답 출력
     summary_text = response.json()["choices"][0]["message"]["content"]
-
-    # Pydantic 모델 인스턴스로 변환
-    summary = ArticleSummary(summary=summary_text)
-    return summary
+    return ArticleSummary(summary=summary_text)
 
 @api_view(['GET'])
 def summarize_news(request):
     query = request.GET.get('query', None)
     if not query:
         return Response({"error": "Query parameter is required"}, status=400)
-
-    # 키워드 추출
     keywords = get_keywords_from_query(query)
-    print(f"추출된 키워드: {keywords}")  # 키워드 출력
-
-    # 뉴스 크롤링 시작
-    fetch_and_process_news(keywords)
-
-    # 뉴스 데이터에서 기사 내용 추출
+    news_list = fetch_and_process_news(keywords)
     articles_content = [news.content for news in news_list]
-
-    # 뉴스 기사 요약
     summary = summarize_articles(articles_content)
     return Response({"summary": summary.summary})
