@@ -29,8 +29,8 @@ def get_news_from_naver(query, display, start):
     else:
         return None
 
-# 뉴스 본문 가져오기 함수
-def get_news_content(url):
+# 뉴스 본문 및 썸네일 가져오기 함수
+def get_news_content_and_thumbnail(url):
     try:
         response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -38,22 +38,35 @@ def get_news_content(url):
         # 네이버 뉴스인 경우
         if 'news.naver.com' in url:
             content = soup.select_one('#dic_area')
+            thumbnail = soup.select_one('meta[property="og:image"]')
             if content:
-                return content.get_text(strip=True)
+                content_text = content.get_text(strip=True)
+            else:
+                content_text = "본문을 가져올 수 없습니다."
+            if thumbnail:
+                thumbnail_url = thumbnail['content']
+            else:
+                thumbnail_url = ""
+            return content_text, thumbnail_url
         
         # article 태그 찾기
         article = soup.find('article')
         if article:
-            return article.get_text(strip=True)
+            content_text = article.get_text(strip=True)
+        else:
+            content_text = "본문을 가져올 수 없습니다."
         
-        # article 태그가 없으면 body 내용 가져오기
-        body = soup.find('body')
-        if body:
-            return body.get_text(strip=True)
-        
-        return "본문을 가져올 수 없습니다."
-    except:
-        return "본문을 가져올 수 없습니다."
+        # 썸네일 메타 태그에서 가져오기
+        thumbnail = soup.select_one('meta[property="og:image"]')
+        if thumbnail:
+            thumbnail_url = thumbnail['content']
+        else:
+            thumbnail_url = ""
+
+        return content_text, thumbnail_url
+
+    except Exception as e:
+        return "본문을 가져올 수 없습니다.", ""
 
 # 뉴스 클래스 정의
 class News(BaseModel):
@@ -78,10 +91,8 @@ def fetch_and_process_news(query):
                 title = item['title']
                 link = item['link']
                 pubDate = item['pubDate']
-                thumbnail = item.get('thumbnail', '')
-
-                # 본문 내용 가져오기
-                content = get_news_content(link)
+                # 본문 내용 및 썸네일 가져오기
+                content, thumbnail = get_news_content_and_thumbnail(link)
 
                 # 뉴스 객체 생성
                 news = News(
@@ -111,13 +122,6 @@ for i, news in enumerate(news_list):
     print(f"썸네일: {news.thumbnail}")
     print(f"날짜: {news.date}")
     print(f"내용: {news.content}\n")  # 전체 내용 출력
-
-# 데이터 프레임으로 만들기
-news_df = pd.DataFrame([news.dict() for news in news_list])
-
-# 데이터 프레임 저장
-now = datetime.datetime.now()
-news_df.to_csv(f'{query}_{now.strftime("%Y%m%d_%H%M%S")}.csv', encoding='utf-8-sig', index=False)
 
 # Azure OpenAI API 키와 엔드포인트 URL 설정
 api_key = os.getenv("AZURE_OPENAI_API_KEY")
