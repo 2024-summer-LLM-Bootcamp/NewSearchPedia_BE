@@ -1,5 +1,5 @@
 from django.shortcuts import render, get_object_or_404
-from django.http import httpResponse
+from django.http import HttpResponse
 from .models import Article
 from datetime import timezone
 import articles
