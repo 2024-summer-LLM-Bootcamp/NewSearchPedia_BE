@@ -12,13 +12,13 @@ class Article(models.Model):
 
 class news(models.Model):
     article_id = models.ForeignKey(Article, on_delete=models.CASCADE)
-    title = models.CharField(max_Length=100)
+    title = models.CharField(max_length=100)
     content = models.TextField()
     link = models.URLField()
     thumbnail = models.TextField()
     date = models.DateTimeField()
 
-class encyc(models.Models):
+class encyc(models.Model):
     article_id = models.ForeignKey(Article, on_delete=models.CASCADE)
     keyword =  models.CharField(max_length=30)
     content = models.TextField()
