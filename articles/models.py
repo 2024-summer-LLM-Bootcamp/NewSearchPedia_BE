@@ -12,10 +12,10 @@ class Article(models.Model):
 
 class news(models.Model):
     article_id = models.ForeignKey(Article, on_delete=models.CASCADE)
-    title = models.charField(max_Length=100)
+    title = models.CharField(max_Length=100)
     content = models.TextField()
     link = models.URLField()
-    thumbnail = models.ImageField
+    thumbnail = models.TextField()
     date = models.DateTimeField()
 
 class encyc(models.Models):
