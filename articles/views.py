@@ -1,8 +1,8 @@
 from rest_framework.views import APIView, View
 from rest_framework.response import Response
+from rest_framework.decorators import api_view
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
-from rest_framework import viewsets
 from .models import Article
 from .serializers import ArticleSerializer
 from .utils.utils import *
@@ -23,7 +23,7 @@ class ArticlePagination(PageNumberPagination):
 
 
 class Article_View(APIView):
-    queryset = Article.objects.all()
+    queryset = Article.objects.all().order_by('-created_at')
     serializer_class = ArticleSerializer
     pagination_class = ArticlePagination
 
@@ -49,9 +49,13 @@ class Article_View(APIView):
         return self.paginator.get_paginated_response(data)
 
     def get(self, request):
+        search = request.GET.get('search')
+        if search is None:
+            search = ""
         if not request.user.is_authenticated:
             return Response({'error': '로그인이 필요합니다!'}, status=status.HTTP_401_UNAUTHORIZED)
-        articles = Article.objects.filter(user_id=request.user)
+        articles = Article.objects.filter(
+            user_id=request.user, user_input__contains=search)
         page = self.paginate_queryset(articles)
         if page is not None:
             serializer = self.get_paginated_response(self.serializer_class(page,
@@ -88,16 +92,17 @@ class Article_View(APIView):
         return Response({'messasge': 'created', 'article': serializer.data}, status=status.HTTP_201_CREATED)
 
 
-class Article_Detail_View(View):
+class Article_Detail_View(APIView):
     def get(self, request, article_id):
         # auth
         if not request.user.is_authenticated:
             return Response({'error': '로그인이 필요합니다!'}, status=status.HTTP_401_UNAUTHORIZED)
 
         article = Article.objects.filter(
-            user=request.user, id=article_id).first()
+            user_id=request.user,
+            id=article_id).first()
 
         # 404 not found
         if article is None:
             return Response({"error": "해당 아티클을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
-        return Response({'article': article}, status=status.HTTP_200_OK)
+        return Response({'article': ArticleSerializer(article).data}, status=status.HTTP_200_OK)
