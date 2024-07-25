@@ -1,18 +1,21 @@
 import os
-import dotenv
+from pydantic import BaseModel
+from .serviecs import naver_api_service, get_news_content_and_thumbnail, openai_api
 
-from .serviecs import naver_api_service
-
-
-# 환경 변수 로드
-dotenv.read_dotenv()
+# 뉴스 클래스 정의
 
 
-# Azure OpenAI API 키와 엔드포인트 URL 설정
-api_key = os.getenv("AZURE_OPENAI_API_KEY")
-endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT")
-api_version = os.getenv("OPENAI_API_VERSION")
+class News(BaseModel):
+    title: str
+    content: str
+    link: str
+    thumbnail: str
+    date: str
+
+
+class Encyc(BaseModel):
+    title: str
+    link: str
 
 
 def get_news(query):
@@ -37,33 +40,91 @@ def get_news(query):
     # link
     # thumbnail
     # date
-    return news_list
+    return crawling_news(news_list)
 
 
-def crawling_news():
+def crawling_news(item_list):
     '''
     기사 리스트 내용 크롤링 후 기사 객체 생성 및 리스트 반환
     '''
-    return []
+    news_list = []
+    for item in item_list:
+        title = item['title']
+        link = item['link']
+        pubDate = item['pubDate']
+        # 본문 내용 및 썸네일 가져오기
+        content, thumbnail = get_news_content_and_thumbnail(link)
+
+        # 뉴스 객체 생성
+        news = News(
+            title=title,
+            content=content,
+            link=link,
+            thumbnail=thumbnail,
+            date=pubDate
+        )
+
+        news_list.append(news.dict())
+    return news_list
 
 
-def generate_summary_text():
+def generate_summary_from_news_list(news_list: News):
     '''
     크롤링한 기사 내용으로 요약문 생성
     '''
-    return ""
+    contents = [news['content'] for news in news_list]
+    combined_content = "\n\n".join(contents)
+
+    data = {
+        "temperature": 0.5,
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant specialized in summarizing news articles. Please provide a concise summary of the following combined news articles in Korean, including only the most important and relevant points in a single paragraph. 자주 나오는 내용이나 중요한 정보를 요약해줘"},
+            {"role": "user", "content": combined_content}
+        ]}
+
+    summary = openai_api(data)
+
+    return summary
 
 
-def generate_keyword():
+def generate_keyword(summary):
     '''
     요약문에서 키워드 추출
     '''
-    return ""
+
+    # system_prompt_str = """
+    # You are an assistant for identifying and extracting key phrases or keywords from a given context that are useful for further searches in an encyclopedia or database. Ensure the keywords are specific and provide sufficient context for comprehensive searches.
+    # Extract specific and contextually rich keywords from the given news article that are useful for encyclopedia search. Each keyword must contain the source of the keyword.
+    # For example, instead of 'medical issue', use 'Joe Biden's medical issue'. Instead of "inflation", use 'inflation of US'. Use the following pieces of retrieved context to answer the question. Instead of "a peaceful solution", use "a peaceful solution to the war in Ukraine". Instead of "Conditions for the end of the war", use " in Ukraine". Use "conditions for establishing an allegation of breach of duty" instead of "alleged breach of duty". Don't put simple facts like "67 polls Trump 47.4% Harris 45.4%" as keywords.
+    # {summary} """.strip()
+
+    system_prompt_str = f"Extract key phrases or keywords from the given news article that are useful for encyclopedia searches. Provide contextually rich and specific keywords {summary}"
+
+    data = {
+        "temperature": 0.3,
+        "max_tokens": 50,
+        "messages": [
+            {"role": "system", "content": system_prompt_str},
+            {"role": "user", "content": ""}
+        ]
+    }
+
+    keywords = openai_api(data)
+    return keywords.strip()
 
 
 # 네이버 백과사전 API -> return 백과사전 리스트
-def naver_encyc_api():
+def get_encycs(query):
     '''
     백과사전 객체 생성 및 리스트 반환
     '''
-    return []
+    encyc_list = []
+
+    url = f"https://openapi.naver.com/v1/search/encyc.json?query={query}&display=10&start=1"
+
+    item_list = naver_api_service(url)['items']
+
+    for item in item_list:
+        encyc_list.append(Encyc(title=item['title'], link=item['link']).dict())
+
+    return encyc_list
