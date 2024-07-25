@@ -11,15 +11,16 @@ from .utils.utils import *
 class Article_View(APIView):
     def get(self, request):
         # TODO: 회원인증 필수
-        # if request.user  ?
+        if request.user.is_authenticated:
+            return Response({'error': '로그인이 필요합니다!'}, status=status.HTTP_401_UNAUTHORIZED)
         articles = Article.objects.filter(user_id=request.user)
         serializer = ArticleSerializer(articles, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
+        
     def post(self, request):
         # TODO: 회원인증 필수
-        # if request.user  ?
-        data = request.data
+        if request.user.is_authenticated:
+            return Response({'error': '로그인이 필요합니다!'}, status=status.HTTP_401_UNAUTHORIZED)
         print(data)
         query = data['query']
 
