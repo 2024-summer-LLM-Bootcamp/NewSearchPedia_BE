@@ -3,18 +3,26 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import viewsets
-
 from .models import Article
 from .serializers import ArticleSerializer
 from .utils.utils import *
 
 # Create your views here.
+'''
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10
 }
+'''
+class ArticlePagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 class Article_View(APIView):
+    queryset = Article.objects.all()
+    serializer_class = ArticleSerializer
+    pagination_class = ArticlePagination
     def get(self, request):
         if not request.user.is_authenticated:
             return Response({'error': '로그인이 필요합니다!'}, status=status.HTTP_401_UNAUTHORIZED)
@@ -48,8 +56,7 @@ class Article_View(APIView):
 
         serializer = ArticleSerializer(new_article)
         return Response({'messasge': 'created', 'article': serializer.data}, status=status.HTTP_201_CREATED)
-
-
+    
 class Article_Detail_View(View):
     def get(self, request, article_id):
         # auth
