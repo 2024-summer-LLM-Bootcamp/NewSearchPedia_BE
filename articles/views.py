@@ -1,4 +1,4 @@
-from rest_framework.views import APIView
+from rest_framework.views import APIView, View
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
@@ -16,17 +16,16 @@ REST_FRAMEWORK = {
 
 class Article_View(APIView):
     def get(self, request):
-        # TODO: 회원인증 필수
         if not request.user.is_authenticated:
             return Response({'error': '로그인이 필요합니다!'}, status=status.HTTP_401_UNAUTHORIZED)
         articles = Article.objects.filter(user_id=request.user)
         serializer = ArticleSerializer(articles, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-        
+
     def post(self, request):
-        # TODO: 회원인증 필수
         if not request.user.is_authenticated:
             return Response({'error': '로그인이 필요합니다!'}, status=status.HTTP_401_UNAUTHORIZED)
+        data = request.data
         print(data)
         query = data['query']
 
@@ -49,3 +48,18 @@ class Article_View(APIView):
 
         serializer = ArticleSerializer(new_article)
         return Response({'messasge': 'created', 'article': serializer.data}, status=status.HTTP_201_CREATED)
+
+
+class Article_Detail_View(View):
+    def get(self, request, article_id):
+        # auth
+        if not request.user.is_authenticated:
+            return Response({'error': '로그인이 필요합니다!'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        article = Article.objects.filter(
+            user=request.user, id=article_id).first()
+
+        # 404 not found
+        if article is None:
+            return Response({"error": "해당 아티클을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'article': article}, status=status.HTTP_200_OK)
