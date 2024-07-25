@@ -16,6 +16,7 @@ class News(BaseModel):
 class Encyc(BaseModel):
     title: str
     link: str
+    thumbnail: str
 
 
 def get_news(query):
@@ -125,6 +126,7 @@ def get_encycs(query):
     item_list = naver_api_service(url)['items']
 
     for item in item_list:
-        encyc_list.append(Encyc(title=item['title'], link=item['link']).dict())
+        encyc_list.append(Encyc(
+            title=item['title'], link=item['link'], thumbnail=item['thumbnail']).dict())
 
     return encyc_list
