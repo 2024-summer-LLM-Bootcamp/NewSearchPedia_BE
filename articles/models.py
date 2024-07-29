@@ -10,3 +10,6 @@ class Article(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, blank=True)
     news_list = models.JSONField(blank=True, null=True, default=dict)
     encyc_list = models.JSONField(blank=True, null=True, default=dict)
+
+    def __str__(self) -> str:
+        return self.user_input
